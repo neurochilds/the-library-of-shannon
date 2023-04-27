@@ -305,5 +305,14 @@ def reset_words():
     global stop_requested
     stop_requested = True
     global state
-    state['sentence'] = ''
+    state = {
+        'first_word': True,
+        'n_words': 0,
+        'words': [0, 0, 0, 0],
+        'sentences': 0,
+        'sentence_ended': False,
+        'ends_in_comma': False,
+        'curr_order_of_approx': 1,
+        'sentence': ''
+        }
     return 'Reset words'
