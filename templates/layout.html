@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+
+<html lang="en">
+    <head>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+        <link href="/static/styles.css" rel="stylesheet">
+        <title>My Project</title>
+        <script>
+            function stopGeneratingWords() {
+                // Make a GET request to the Flask app to stop generating words
+                fetch('/stop_generating_words', {
+                method: 'GET',
+                })
+            }
+
+            window.addEventListener('beforeunload', (event) => {
+                // Make a GET request to the Flask app to stop generating words
+                navigator.sendBeacon('/reset_words');
+            });
+
+        </script>
+        {{ turbo() }}
+    </head>
+    <body>
+        <div class="bg-image"><img src="old-paper.jpg"></div>
+        <header>
+            <div class="banner">
+                <h1>The Library of Shannon</h1>
+            </div>
+        </header>
+
+        <div class="wrapper">
+            <div class="main">
+                {% block main %}{% endblock %}
+            </div>
+            <section id="footer">
+                <div class="container">
+                    <ul>
+                        <li>© Tom Childs. All rights reserved. <a href="index.html">Return to landing Page.</a></li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </body>
+</html>
