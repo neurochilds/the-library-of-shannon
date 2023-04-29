@@ -11,26 +11,35 @@
             let stopRequested = false;
 
             document.addEventListener("DOMContentLoaded", function() {
-                document.getElementById("parameters").addEventListener("submit", function(){
+                const form = document.getElementById("parameters")
+                form.addEventListener("submit", function(event){
                     // Disable the submit button until text finished generating
-                    const submitButton = document.getElementById('submit');
+                    const submitButton = document.getElementById('submitBtn');
                     submitButton.disabled = true;
 
                     // Delete any existing text and reset variables
-                    const textElement = document.getElementById('text');
-                    textElement.innerHTML = '';
+                    resetInnerHTML('text', 'selected_order', 'selected_book')
                     lastRenderedText = ''
                     stopRequested = false;
 
-                    // Give app.py 500 ms to start generating text then fetch it
-                    setTimeout(fetchText, 500);
+                    // Give app.py 1 second to start generating text then fetch it
+                    setTimeout(fetchText, 1000);
                 });
             })
+
+            function resetInnerHTML(...elementIds) {
+                elementIds.forEach(id => {
+                    document.getElementById(id).innerHTML = '';
+                });
+            }
 
             async function fetchText() {
                 const response = await fetch('/fetch_generated_text');
                 const data = await response.json();
                 const currentText = data.generated_text;
+
+                document.getElementById('selected_book').innerHTML = 'Book ' + data.book
+                document.getElementById('selected_order').innerHTML = 'Order ' + data.order
 
                 if (currentText.length > lastRenderedText.length) {
                     await renderNewWords(lastRenderedText, currentText);
@@ -44,7 +53,7 @@
 
                 // Otherwise, text completion is finished and submit button can be enabled again
                 else {
-                    const submitButton = document.getElementById('submit');
+                    const submitButton = document.getElementById('submitBtn');
                     submitButton.disabled = false;
                 }
             }
@@ -82,7 +91,7 @@
             }
 
             window.addEventListener('beforeunload', (event) => {
-                // Send a beacon to the Flask app to reset generating words
+                // Send a beacon to the Flask app to stop generating and reset words whenever page is refreshed
                 navigator.sendBeacon('/reset_words');
             });            
         </script>
