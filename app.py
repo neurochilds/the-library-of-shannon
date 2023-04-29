@@ -8,9 +8,21 @@ global stop_requested
 global params
 global state
 global selection
-global sentence
 
+state = {
+        'first_word': True,
+        'n_words': 0,
+        'words': [0, 0, 0, 0],
+        'sentences': 0,
+        'sentence_ended': False,
+        'ends_in_comma': False,
+        'curr_order_of_approx': 1,
+        'sentence': '',
+        'finished_generating': True
+    }
 
+selection = {'book':'', 'words':'', 'order':''}
+    
 @app.route("/")
 def index():
     return render_template('index.html')
