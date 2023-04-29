@@ -1,9 +1,5 @@
 <div class="container" id="book_text">
-    {% if sentence %}
-    <h2>Book {{ selection['book'] }} </h2>
-    <h6>Order: {{ selection['order'] }} </h6>
-    <p id="text">
-        {{ sentence|safe }}
-    </p>
-    {% endif %}
+    <h2 id="selected_book"></h2>
+    <h6 id="selected_order"></h6>
+    <p id="text"></p>
 </div>
