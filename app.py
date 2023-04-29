@@ -1,16 +1,14 @@
-from flask import Flask, render_template, request
-from turbo_flask import Turbo
+from flask import Flask, render_template, request, jsonify
 import random
-import time
 import json
 
 app = Flask(__name__)
-turbo = Turbo(app)
 
 global stop_requested 
 global params
 global state
 global selection
+global sentence
 
 
 @app.route("/")
@@ -21,6 +19,11 @@ def index():
 @app.route('/info.html', methods=['GET'])
 def info():
     return render_template('info.html')
+
+
+@app.route('/fetch_generated_text', methods=['GET'])
+def fetch_generated_text():
+    return jsonify(generated_text=state['sentence'], finished_generating=state['finished_generating'], book=selection['book'], order=selection['order'])
 
 
 @app.route("/generate_words", methods=["POST"])
@@ -87,7 +90,8 @@ def generate_words():
             'sentence_ended': False,
             'ends_in_comma': False,
             'curr_order_of_approx': 1,
-            'sentence': ''
+            'sentence': '',
+            'finished_generating': False
             }
 
         params['rand'].seed(book)
@@ -123,9 +127,8 @@ def print_text(params, state, selection, is_first_order=False):
         elif state['n_words'] < params['max_words']:
             if state['sentences'] > params['rand'].randint(5, 20):
                 state['sentence'] += '<br><br>' # New para
-                with app.app_context():
-                    turbo.push(turbo.replace(render_template('text.html', sentence=state['sentence'], selection=selection), 'book_text'))
                 state['sentences'] = 0
+    state['finished_generating'] = True
 
 
 def print_random(dictionary, params, state):
@@ -137,8 +140,6 @@ def print_random(dictionary, params, state):
             state['first_word'] = False
         state['sentence'] += add_noise(new_word, params['noise'], params['noise_rand'])
         state['n_words'] += 1
-
-        render_word(new_word, state=state, delay=params['type_delay'], selection=selection)
         
         if state['n_words'] == params['max_words']:
             state['sentence'] += '.'
@@ -147,8 +148,6 @@ def print_random(dictionary, params, state):
             state['first_word'] = True
         else:
             state['sentence'] += ' '
-            
-        turbo.push(turbo.replace(render_template('text.html', sentence=state['sentence'], selection=selection), 'book_text'))
 
 
 def construct_first_order_sentence(params, state, selection):
@@ -177,7 +176,6 @@ def construct_first_order_sentence(params, state, selection):
             state['sentences'] += 1
 
         add_word_ending_and_noise(new_word, state=state, params=params)
-        render_word(new_word, state=state, delay=params['type_delay'], selection=selection)
 
 
 def construct_markov_sentence(state, params, selection):
@@ -262,7 +260,6 @@ def construct_markov_sentence(state, params, selection):
                     state['curr_order_of_approx'] -= 1
                 
                 add_word_ending_and_noise(new_word, state=state, params=params)
-                render_word(new_word, state=state, delay=params['type_delay'], selection=selection)
 
 
 def add_word_ending_and_noise(word, state, params):
@@ -284,19 +281,11 @@ def add_noise(word, noise, noise_rand):
     return word
 
 
-def render_word(word, state, delay, selection):
-    # Print each word letter by letter
-    with app.app_context(): 
-        for i in range(1, len(word)):
-            turbo.push(turbo.replace(render_template('text.html', sentence=state['sentence'][:-len(word)+i], selection=selection), 'book_text'))
-            time.sleep(delay)
-        turbo.push(turbo.replace(render_template('text.html', sentence=state['sentence'], selection=selection), 'book_text'))
-
-
 @app.route('/stop_generating_words', methods=['GET'])
 def stop_generating_words():
     global stop_requested
     stop_requested = True
+    state['finished_generating'] = True
     return 'Stopped generating words'
 
 
@@ -313,6 +302,7 @@ def reset_words():
         'sentence_ended': False,
         'ends_in_comma': False,
         'curr_order_of_approx': 1,
-        'sentence': ''
-        }
+        'sentence': '',
+        'finished_generating': True
+    }
     return 'Reset words'

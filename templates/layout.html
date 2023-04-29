@@ -7,20 +7,85 @@
         <link href="/static/styles.css" rel="stylesheet">
         <title>My Project</title>
         <script>
+            let lastRenderedText = '';
+            let stopRequested = false;
+
+            document.addEventListener("DOMContentLoaded", function() {
+                document.getElementById("parameters").addEventListener("submit", function(){
+                    // Disable the submit button until text finished generating
+                    const submitButton = document.getElementById('submit');
+                    submitButton.disabled = true;
+
+                    // Delete any existing text and reset variables
+                    const textElement = document.getElementById('text');
+                    textElement.innerHTML = '';
+                    lastRenderedText = ''
+                    stopRequested = false;
+
+                    // Give app.py 500 ms to start generating text then fetch it
+                    setTimeout(fetchText, 500);
+                });
+            })
+
+            async function fetchText() {
+                const response = await fetch('/fetch_generated_text');
+                const data = await response.json();
+                const currentText = data.generated_text;
+
+                if (currentText.length > lastRenderedText.length) {
+                    await renderNewWords(lastRenderedText, currentText);
+                    lastRenderedText = currentText;
+                }
+
+                // If app.py still generating text, wait 500ms then fetch the updated sentence
+                if (!data.finished_generating) {
+                    setTimeout(fetchText, 500);
+                }
+
+                // Otherwise, text completion is finished and submit button can be enabled again
+                else {
+                    const submitButton = document.getElementById('submit');
+                    submitButton.disabled = false;
+                }
+            }
+
+            async function renderNewWords(oldText, newText) {
+                return new Promise(async resolve => {
+                    const textElement = document.getElementById('text');
+                    const newWords = newText.slice(oldText.length);
+                    await typeText(textElement, newWords);
+                    resolve();
+                });    
+            }
+
+            function typeText(element, text, index = 0) {
+                // Render the text letter by letter
+                return new Promise((resolve) => {
+                    if (index < text.length && !stopRequested) {
+                    element.innerHTML += text[index];
+                    setTimeout(() => {
+                        typeText(element, text, index + 1).then(resolve);
+                    }, 50); // Control typing speed
+                    }
+                    else {
+                        resolve();
+                    }
+                });  
+            }
+
             function stopGeneratingWords() {
                 // Make a GET request to the Flask app to stop generating words
+                stopRequested = true;
                 fetch('/stop_generating_words', {
-                method: 'GET',
+                    method: 'GET',
                 })
             }
 
             window.addEventListener('beforeunload', (event) => {
-                // Make a GET request to the Flask app to stop generating words
+                // Send a beacon to the Flask app to reset generating words
                 navigator.sendBeacon('/reset_words');
-            });
-
+            });            
         </script>
-        {{ turbo() }}
     </head>
     <body>
         <header>
