@@ -221,10 +221,10 @@ def construct_markov_sentence(state, params, selection):
 
                 count += 1
                 if not word_found and count >= params['max_searches']:
-                    # If we reached max count at order_of_approx = 1, then we will give up and pick the next word randomly and independently
+                    # If we reached max count at order_of_approx = 2, then we will give up and pick the next word randomly and independently
                     # of all previous words. If the last word does not end in a comma, we will print a full stop and start a new sentence with word.capitalize().
                     # If ends in comma, we will simply print a space and won't capitalize the next word.
-                    # If we reach max count at order_of_approx > 1, we will stop trying to find the current (n = order_of_approx) words
+                    # If we reach max count at order_of_approx > 2, we will stop trying to find the current (n = order_of_approx) words
                     # randomly, as it is taking too long, and instead just look for the latest n - 1 words.
                     if state['curr_order_of_approx'] == 2:
                         last_char_of_last_word = state['words'][0][-1]
