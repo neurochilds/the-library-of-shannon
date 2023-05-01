@@ -37,6 +37,7 @@
                 const response = await fetch('/fetch_generated_text');
                 const data = await response.json();
                 const currentText = data.generated_text;
+                console.log(currentText)
 
                 document.getElementById('selected_book').innerHTML = 'Book ' + data.book
                 document.getElementById('selected_order').innerHTML = 'Order ' + data.order
@@ -59,27 +60,22 @@
             }
 
             async function renderNewWords(oldText, newText) {
-                return new Promise(async resolve => {
                     const textElement = document.getElementById('text');
                     const newWords = newText.slice(oldText.length);
                     await typeText(textElement, newWords);
-                    resolve();
-                });    
             }
 
-            function typeText(element, text, index = 0) {
+            async function typeText(element, text, index = 0) {
                 // Render the text letter by letter
-                return new Promise((resolve) => {
-                    if (index < text.length && !stopRequested) {
-                    element.innerHTML += text[index];
-                    setTimeout(() => {
-                        typeText(element, text, index + 1).then(resolve);
-                    }, 50); // Control typing speed
-                    }
-                    else {
-                        resolve();
-                    }
-                });  
+                for (const char of text) {
+                    if (stopRequested) return
+                    element.innerHTML += char;
+                    await delay(50) // Control typing speed
+                }
+            }
+
+            function delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms))
             }
 
             function stopGeneratingWords() {
