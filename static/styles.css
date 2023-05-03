@@ -141,7 +141,18 @@ input {
 .input {
     display: flex;
     flex-direction: row;
+    align-items: center;
     margin-left: 0 !important;
+    justify-content: flex-start;
+}
+
+#message {
+    display: flex;
+    align-items: center;
+    margin-top: 1em;
+    margin-bottom: 0;
+    margin-left: 1em;
+    color: red;
 }
 
 .btn {

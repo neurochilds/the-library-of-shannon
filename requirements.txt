@@ -1,3 +1,3 @@
-Flask
-gunicorn
-turbo_flask
+fastapi
+uvicorn
+jinja2

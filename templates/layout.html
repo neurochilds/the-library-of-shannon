@@ -9,21 +9,64 @@
         <script>
             let lastRenderedText = '';
             let stopRequested = false;
+            let renderChain = Promise.resolve();
+            let websocket = '';
 
             document.addEventListener("DOMContentLoaded", function() {
                 const form = document.getElementById("parameters")
                 form.addEventListener("submit", function(event){
+                    event.preventDefault();
+
                     // Disable the submit button until text finished generating
                     const submitButton = document.getElementById('submitBtn');
                     submitButton.disabled = true;
 
                     // Delete any existing text and reset variables
-                    resetInnerHTML('text', 'selected_order', 'selected_book')
+                    resetInnerHTML('text', 'selected_order', 'selected_book', 'message')
                     lastRenderedText = ''
                     stopRequested = false;
 
-                    // Give app.py 1 second to start generating text then fetch it
-                    setTimeout(fetchText, 1000);
+                    // Get form data
+                    const formData = new FormData(event.target);
+                    const data = JSON.stringify(Object.fromEntries(formData));
+
+                    // Get the current location and protocol
+                    const location = window.location;
+                    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+
+                    // Construct the WebSocket URL based on the current location and protocol
+                    const websocketURL = `${protocol}//${location.host}/ws`;
+
+                    // Send form data to server over websocket
+                    websocket = new WebSocket(websocketURL);
+                    websocket.onopen = (event) => {
+                        websocket.send(data);
+                    };
+
+                    // Re-enable submit button once websocket closed
+                    websocket.onclose = function(event) {
+                        submitButton.disabled = false;
+                    };
+
+                    websocket.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+
+                        if ('generated_text' in data) {
+                            // Promise chain to ensure each new piece of text is only rendered after previous text finished rendering
+                            renderChain = renderChain.then(() => renderText(data));
+
+                            if (data.finished_generating) {
+                                renderChain.then(() => {
+                                    submitButton.disabled = false;
+                                });
+                            };
+                        } 
+                        
+                        else if ('message' in data) {
+                            submitButton.disabled = false;
+                            document.getElementById('message').innerHTML = data.message;
+                        }
+                    };
                 });
             })
 
@@ -33,11 +76,8 @@
                 });
             }
 
-            async function fetchText() {
-                const response = await fetch('/fetch_generated_text');
-                const data = await response.json();
+            async function renderText(data) {
                 const currentText = data.generated_text;
-                console.log(currentText)
 
                 document.getElementById('selected_book').innerHTML = 'Book ' + data.book
                 document.getElementById('selected_order').innerHTML = 'Order ' + data.order
@@ -46,31 +86,24 @@
                     await renderNewWords(lastRenderedText, currentText);
                     lastRenderedText = currentText;
                 }
-
-                // If app.py still generating text, wait 500ms then fetch the updated sentence
-                if (!data.finished_generating) {
-                    setTimeout(fetchText, 500);
-                }
-
-                // Otherwise, text completion is finished and submit button can be enabled again
-                else {
-                    const submitButton = document.getElementById('submitBtn');
-                    submitButton.disabled = false;
-                }
             }
 
             async function renderNewWords(oldText, newText) {
-                    const textElement = document.getElementById('text');
                     const newWords = newText.slice(oldText.length);
-                    await typeText(textElement, newWords);
+                    await typeText(newWords);
             }
 
-            async function typeText(element, text, index = 0) {
+            async function typeText(text) {
                 // Render the text letter by letter
+                const textElement = document.getElementById('text');
                 for (const char of text) {
-                    if (stopRequested) return
-                    element.innerHTML += char;
-                    await delay(50) // Control typing speed
+                    if (stopRequested) return;
+                    if (char == '<') {
+                        textElement.innerHTML += '<br>'
+                    } else {
+                        textElement.innerHTML += char;
+                    }
+                    await delay(20) // Control typing speed
                 }
             }
 
@@ -78,16 +111,13 @@
                 return new Promise(resolve => setTimeout(resolve, ms))
             }
 
-            function stopGeneratingWords() {
-                // Make a GET request to the Flask app to stop generating words
+            async function stopGeneratingWords() {
                 stopRequested = true;
-                fetch('/stop_generating_words', {
-                    method: 'GET',
-                })
+                await websocket.send(JSON.stringify({"stop": true}));
             }
 
             window.addEventListener('beforeunload', (event) => {
-                // Send a beacon to the Flask app to stop generating and reset words whenever page is refreshed
+                // Send a beacon to the FastAPI app to stop generating and reset words whenever page is refreshed
                 navigator.sendBeacon('/reset_words');
             });            
         </script>
