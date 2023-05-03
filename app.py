@@ -4,10 +4,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import json
 import random
-import time
 import asyncio
 
-old_time = time.time()
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -153,10 +151,7 @@ async def construct_random_text(websocket: WebSocket, state, params, dictionary)
         else:
             state['sentence'] += ' '
 
-        global old_time
-        if time.time() - old_time > 1: 
-            old_time = time.time()
-            await send_text_to_client(websocket, state=state, params=params) 
+        await send_text_to_client(websocket, state=state, params=params) 
     
     state['finished_generating'] = True
 
@@ -293,12 +288,7 @@ async def add_word_ending_and_noise(websocket: WebSocket, word, state, params):
     else:
         state['sentence'] += await add_noise(word, params['noise'], params['noise_rand']) + ' '
 
-   # If last update was sent more than 1 second ago, send updated text to client via WebSocket
-    global old_time
-    if time.time() - old_time > 1:
-        old_time = time.time()
-        return await send_text_to_client(websocket, state=state, params=params) 
-    return
+    return await send_text_to_client(websocket, state=state, params=params) 
 
 
 async def send_text_to_client(websocket:WebSocket, state, params):
