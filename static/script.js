@@ -105,6 +105,5 @@ function delay(ms) {
 async function stopConstructingWords() {
     stopRequested = true;
     await websocket.send(JSON.stringify({"stop": true}));
-    const submitButton = document.getElementById('submitBtn');
-    submitButton.disabled = false;
+    document.getElementById('submitBtn').disabled = false;
 }
