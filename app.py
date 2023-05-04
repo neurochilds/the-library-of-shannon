@@ -18,14 +18,18 @@ stop_requested = False
 TEXT_FILE = 'source_text.txt'
 WORD_DICTIONARY = 'words_dictionary.json'
 
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    '''
+    Creates websocket with client, recieves form data and passes data as an argument to construct_book()
+    '''
     await websocket.accept()
     data = await websocket.receive_json()
     book = data["book"]
     words = data["words"]
     order = data["order"]
-    await generate_words(websocket, book=book, words=words, order=order)
+    await construct_book(websocket, book=book, words=words, order=order)
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -37,7 +41,11 @@ async def info(request: Request):
     return templates.TemplateResponse('info.html', {"request": request})
 
 
-async def generate_words(websocket: WebSocket, book, words, order):
+async def construct_book(websocket: WebSocket, book, words, order):
+    '''
+    Initializes state and params global variables, then calls a text constructing function depending on the form data.
+    The chosen 'book' is used to seed the random number generator, 'words' determines the number of words construct, and 'order' determines the order of approximation and hence which text construction function to execute.
+    '''
     global stop_requested
     stop_requested = False
 
@@ -81,7 +89,7 @@ async def generate_words(websocket: WebSocket, book, words, order):
         'ends_in_comma': False,
         'curr_order_of_approx': 1,
         'sentence': '',
-        'finished_generating': False
+        'finished_constructing': False
         }
 
     params['rand'].seed(book)
@@ -108,6 +116,13 @@ async def load_text(folder_path):
     
 
 async def construct_text(websocket: WebSocket, params, state, is_first_order=False):
+    '''
+    This function constructs the text by calling other functions that construct a single sentence and itself structures the text into paragraphs.
+    The sentence constructing function chosen depends on the order of approx.
+    This function never inserts a new para until at least 4 sentences have been produced. 
+    When there are between 5-20 sentences, there is a 1/16 chance that a new para will be inserted after each new sentence.
+    It will always inserts a new para after 20 sentences have been produced. 
+    '''
     while state['n_words'] < params['max_words'] and not stop_requested:
         if is_first_order:
             await construct_first_order_sentence(websocket, params=params, state=state)
@@ -122,12 +137,17 @@ async def construct_text(websocket: WebSocket, params, state, is_first_order=Fal
                 state['sentence'] += '<<' # New para. JS code will conver '<' to '<br>'
                 state['sentences'] = 0
 
-    state['finished_generating'] = True
+    state['finished_constructing'] = True
 
     return await send_text_to_client(websocket, state=state, params=params) 
 
 
 async def construct_random_text(websocket: WebSocket, state, params, dictionary):
+    '''
+    This function constructs the text by randomly selecting words from a dictionary, where each word has equal probability of being selected.
+    This leads to a zero-order approximation to natural English.
+    There is a 1/15 chance that each word selected will end the sentence. Paragraphs will be produced the same way as construct_text() above.
+    '''
     while state['n_words'] < params['max_words'] and not stop_requested:
         index = params['rand'].randint(0, len(dictionary) - 1)
         new_word = dictionary[index]
@@ -153,7 +173,7 @@ async def construct_random_text(websocket: WebSocket, state, params, dictionary)
 
         await send_text_to_client(websocket, state=state, params=params) 
     
-    state['finished_generating'] = True
+    state['finished_constructing'] = True
 
     if await is_stop_requested(websocket):
         return
@@ -162,6 +182,10 @@ async def construct_random_text(websocket: WebSocket, state, params, dictionary)
     
 
 async def construct_first_order_sentence(websocket: WebSocket, params, state):
+    '''
+    This function randomly selects words from a source text file. 
+    This leads to a first-order approximation to natural English, as the probability of a word being included in the constructed text depends on it's frequency of occurence in natural English (the source text being sampled).
+    '''
     state['sentence_ended'] = False
     state['first_word'] = True
     text = params['text']
@@ -190,6 +214,11 @@ async def construct_first_order_sentence(websocket: WebSocket, params, state):
 
 
 async def construct_markov_sentence(websocket: WebSocket, state, params):
+    '''
+    This function randomly selects (order - 1) words from the source text until these words match the last (order - 1) words in the constructed sentence.
+    The word adjacent to these words in the source text is then chosen as the next word in the constructed sentence. 
+    This leads to an (order)-approximation to natural English, as the probability of a word being selected as the next word in the constructed text depends on the frequency with which it follows the last (order - 1) words in natural English (the source text being sampled). 
+    '''
     text = params['text']
     state['sentence_ended'] = False
     while not state['sentence_ended']:
@@ -210,7 +239,7 @@ async def construct_markov_sentence(websocket: WebSocket, state, params):
                     if new_words[i].lower() != state['words'][i]: 
                         break 
 
-                    # If this word is not a proper noun and it's preceding n words match  the last n words in the sentence, it will be selected as the new word in the sentence 
+                    # If this word is not a proper noun and it's preceding n words match the last n words in the sentence, it will be selected as the new word in the sentence 
                     if new_words.get(state['curr_order_of_approx'] - 2) and text[index + state['curr_order_of_approx'] -1].islower(): 
                         new_word = text[index + state['curr_order_of_approx'] -1]
                         state['words'][state['curr_order_of_approx'] - 1] = new_word
@@ -220,11 +249,9 @@ async def construct_markov_sentence(websocket: WebSocket, state, params):
 
                 count += 1
                 if not word_found and count >= params['max_searches']:
-                    # If we reached max count at order_of_approx = 2, then we will give up and pick the next word randomly and independently
-                    # of all previous words. If the last word does not end in a comma, we will print a full stop and start a new sentence with word.capitalize().
-                    # If ends in comma, we will simply print a space and won't capitalize the next word.
-                    # If we reach max count at order_of_approx > 2, we will stop trying to find the current (n = order_of_approx) words
-                    # randomly, as it is taking too long, and instead just look for the latest n - 1 words.
+                    # If we reached max count at order_of_approx = 2, then we will give up and pick the next word independently of all previous words (i.e. at order = 1). 
+                    # If the last word does not end in a comma, we will replace the it's whitespace with a period and start a new sentence.
+                    # If ends in comma, we will simply print a space.
                     if state['curr_order_of_approx'] == 2:
                         last_char_of_last_word = state['words'][0][-1]
                         if last_char_of_last_word != ',':
@@ -236,6 +263,8 @@ async def construct_markov_sentence(websocket: WebSocket, state, params):
                         else:
                             state['ends_in_comma'] = True
                         state['words'][0] = 0
+
+                    # If we reach max count at order_of_approx > 2, we will stop trying to find the current (n = order_of_approx) words, as it is taking too long, and instead reduce the order by 1 and resume looking at this lower order.
                     else: 
                         state['words'][0], state['words'][1], state['words'][2] = state['words'][1], state['words'][2], 0
                     state['curr_order_of_approx'] -= 1
@@ -246,7 +275,7 @@ async def construct_markov_sentence(websocket: WebSocket, state, params):
                 if word[-1] in params['sentence_enders']: 
                     new_word = text[index + 1]
 
-                    # If previous word was comma, next word should be lowercase as same sentence
+                    # If previous word was comma, next word should be lowercase and included in the same sentence
                     if state['ends_in_comma']:
                         new_word = new_word.lower()
                         state['ends_in_comma'] = False
@@ -274,6 +303,9 @@ async def construct_markov_sentence(websocket: WebSocket, state, params):
 
 
 async def add_word_ending_and_noise(websocket: WebSocket, word, state, params):
+    '''
+    This function inserts spaces after each word and ensures the generated text always ends in a period. 
+    '''
     if await is_stop_requested(websocket):
         return
     
@@ -292,17 +324,26 @@ async def add_word_ending_and_noise(websocket: WebSocket, word, state, params):
 
 
 async def send_text_to_client(websocket:WebSocket, state, params):
+    '''
+    This function sends the current sentence, selected book, selected order, and whether or not the text construction is complete to the client via the websocket.
+    '''
     if websocket is not None:
-        return await websocket.send_json({'generated_text': state['sentence'], 'book': params['book'], 'order': params['max_order_of_approx'], 'finished_generating': state['finished_generating']})
+        return await websocket.send_json({'constructed_text': state['sentence'], 'book': params['book'], 'order': params['max_order_of_approx'], 'finished_constructing': state['finished_constructing']})
 
 
 async def add_noise(word, noise, noise_rand):
+    '''
+    This function has not yet been implemented on the client side.
+    '''
     if noise:
         word = ''.join(c if noise_rand.randint(0, 99) > noise else '*' for c in word)
     return word
 
 
 async def is_stop_requested(websocket: WebSocket):
+    '''
+    This function waits 0.1 seconds to see if client has sent a request to stop constructing text. If so, closes the socket and updates the global stop_requested variable to stop text construction.
+    '''
     try:
         data = await asyncio.wait_for(websocket.receive_json(), timeout=.1)
         if "stop" in data and data["stop"]:
@@ -328,6 +369,6 @@ async def reset_words():
         'ends_in_comma': False,
         'curr_order_of_approx': 1,
         'sentence': '',
-        'finished_generating': True
+        'finished_constructing': True
     }
     return 'Reset words'
