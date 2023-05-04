@@ -34,11 +34,6 @@ document.addEventListener("DOMContentLoaded", function() {
             websocket.send(data);
         };
 
-        // Re-enable submit button once websocket closed
-        websocket.onclose = function() {
-            submitButton.disabled = false;
-        };
-
         websocket.onmessage = (event) => {
             const data = JSON.parse(event.data);
 
@@ -110,4 +105,6 @@ function delay(ms) {
 async function stopConstructingWords() {
     stopRequested = true;
     await websocket.send(JSON.stringify({"stop": true}));
+    const submitButton = document.getElementById('submitBtn');
+    submitButton.disabled = false;
 }
