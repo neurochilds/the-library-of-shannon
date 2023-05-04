@@ -17,7 +17,7 @@ h2 {
 a {
     color: #897043;
     text-decoration: none;
-    transition: color 0.175s ease-in-out
+    transition: color 0.2s ease-in-out
 }
 
 a:hover {
@@ -87,15 +87,6 @@ section {
 #footer li {
     color:#212529;
     opacity: 0.7;
-}
-
-#footer li a {
-    color:inherit;
-    text-decoration: inherit;
-}
-
-#footer li a:hover {
-    color:#bfa87d;
 }
 
 button.feedback {
