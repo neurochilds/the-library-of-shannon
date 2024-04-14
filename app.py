@@ -210,7 +210,11 @@ async def construct_random_text(websocket: WebSocket, dictionary):
         else:
             state['sentence'] += ' '
 
-        await send_text_to_client(websocket) 
+        if await is_stop_requested(websocket):
+            print('Returning from construct_random_text function')
+            return
+        else:
+            await send_text_to_client(websocket) 
     
     state['finished_constructing'] = True
 
