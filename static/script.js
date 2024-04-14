@@ -19,46 +19,68 @@ document.addEventListener("DOMContentLoaded", function() {
 
         // Get form data
         const formData = new FormData(event.target);
-        const data = JSON.stringify(Object.fromEntries(formData));
+        const formString = JSON.stringify(Object.fromEntries(formData));
 
         // Get the current location and protocol
         const location = window.location;
         const protocol = location.protocol === "https:" ? "wss:" : "ws:";
 
+        // Close existing socket if one exists
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+            websocket.close();  
+        }
+
         // Construct the WebSocket URL based on the current location and protocol
         const websocketURL = `${protocol}//${location.host}/ws`;
 
-        // Send form data to server over websocket
         websocket = new WebSocket(websocketURL);
         websocket.onopen = () => {
-            websocket.send(data);
+            console.log('WebSocket opened, sending form data');
+            websocket.send(formString);
         };
+        websocket.onmessage = handleWebSocketMessage;
+        websocket.onclose = () => console.log('WebSocket closed');
 
-        websocket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
+        });
+});
 
-            if ('constructed_text' in data) {
-                // Promise chain to ensure each new piece of text is only rendered after previous text finished rendering
-                renderChain = renderChain.then(() => renderText(data));
+function handleWebSocketMessage(event) {
+    const data = JSON.parse(event.data);
+    if (data.session_id) {
+        sessionStorage.setItem('session_id', data.session_id);
+    }
 
-                if (data.finished_constructing) {
-                    renderChain.then(() => {
-                        submitButton.disabled = false;
-                    });
-                };
-            } 
-            
-            else if ('message' in data) {
-                submitButton.disabled = false;
-                document.getElementById('message').innerHTML = data.message;
-            }
+    else if ('constructed_text' in data) {
+        // Promise chain to ensure each new piece of text is only rendered after previous text finished rendering
+        renderChain = renderChain.then(() => renderText(data));
+
+        if (data.finished_constructing) {
+            renderChain.then(() => {
+                document.getElementById('submitBtn').disabled = false;
+            });
         };
-    });
-})
+    } 
+    
+    else if ('message' in data) {
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('message').innerHTML = data.message;
+    }
+
+}
 
 window.addEventListener('beforeunload', () => {
+    // Close the WebSocket when page refreshed
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+        websocket.close();  
+    }
+
     // Send a beacon to the FastAPI app to stop constructing and reset words whenever page is refreshed
-    navigator.sendBeacon('/reset_words');
+    const sessionID = sessionStorage.getItem('session_id');
+    if(sessionID) {
+        const data = new FormData();
+        data.append('session_id', sessionStorage.getItem('session_id'));
+        navigator.sendBeacon('/reset_words', data);
+    }
 });            
 
 function resetInnerHTML(...elementIds) {
