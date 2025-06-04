@@ -5,4 +5,3 @@ websockets==11.0.3
 python-multipart==0.0.8
 starlette==0.27.0
 itsdangerous==2.1.2
-gunicorn==21.2.0
