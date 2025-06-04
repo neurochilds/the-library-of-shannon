@@ -284,8 +284,8 @@ async def construct_markov_sentence(websocket: WebSocket):
         while not word_found:
             if state['stop_requested']:
                 return
-            index = params['rand'].randint(0, len(text) - state['curr_order_of_approx'])
             if state['curr_order_of_approx'] > 1:
+                index = params['rand'].randint(0, len(text) - state['curr_order_of_approx'])
                 new_words = {}
                 for i in range(state['curr_order_of_approx'] - 1):
                     new_words[i] = text[index + i]
@@ -326,6 +326,7 @@ async def construct_markov_sentence(websocket: WebSocket):
                     break
 
             elif state['curr_order_of_approx'] == 1:
+                index = params['rand'].randint(0, len(text) - 2)
                 word = text[index]
                 if word[-1] in params['sentence_enders']: 
                     new_word = text[index + 1]
