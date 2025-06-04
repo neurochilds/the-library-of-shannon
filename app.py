@@ -170,7 +170,7 @@ async def construct_text(websocket: WebSocket, is_first_order=False):
 
         if state['n_words'] < params['max_words']:
             if state['sentences'] > params['rand'].randint(5, 20):
-                state['sentence'] += '<<' # New para. JS code will conver '<' to '<br>'
+                state['sentence'] += '<<' # New para. JS code will convert '<' to '<br>'.
                 state['sentences'] = 0
 
     sessions[websocket.session_id]['state']['finished_constructing'] = True
@@ -201,7 +201,7 @@ async def construct_random_text(websocket: WebSocket, dictionary):
             state['sentence'] += '.'
         elif params['rand'].randint(0, 15) > 14:
             if state['sentences'] > params['rand'].randint(5, 20):
-                state['sentence'] += '.<<' # New para. JS code will conver '<' to '<br>'
+                state['sentence'] += '.<<' # New para. JS code will convert '<' to '<br>'.
                 state['sentences'] = 0
                 state['first_word'] = True
             else:
