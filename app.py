@@ -8,6 +8,7 @@ import uuid
 import json
 import random
 import asyncio
+from typing import Dict, Any
 
 
 app = FastAPI()
@@ -19,6 +20,47 @@ sessions = {}
 
 TEXT_FILE = 'source_text.txt'
 WORD_DICTIONARY = 'words_dictionary.json'
+
+# Load resources once at startup to avoid repeated disk IO
+with open(TEXT_FILE, 'r', encoding='utf-8') as file:
+    SOURCE_TEXT = file.read().split()
+
+with open(WORD_DICTIONARY, 'r') as file:
+    DICTIONARY = list(json.load(file).keys())
+
+
+def default_state() -> Dict[str, Any]:
+    """Return a fresh session state dictionary."""
+    return {
+        'stop_requested': False,
+        'first_word': True,
+        'n_words': 0,
+        'words': [0, 0, 0, 0],
+        'sentences': 0,
+        'sentence_ended': False,
+        'ends_in_comma': False,
+        'curr_order_of_approx': 1,
+        'sentence': '',
+        'finished_constructing': False,
+    }
+
+
+def default_params(book: int, words: int, order: int) -> Dict[str, Any]:
+    """Return a params dictionary seeded with the selected book."""
+    rand = random.Random(book)
+    noise_rand = random.Random(book)
+    return {
+        'text': SOURCE_TEXT,
+        'max_searches': 500000,
+        'noise': 0,
+        'rand': rand,
+        'noise_rand': noise_rand,
+        'sentence_enders': ['.', '!', '?'],
+        'max_order_of_approx': order,
+        'max_words': words,
+        'type_delay': 0.025,
+        'book': book,
+    }
 
 
 @app.websocket("/ws")
@@ -36,14 +78,10 @@ async def websocket_endpoint(websocket: WebSocket):
         words = data["words"]
         order = data["order"]
 
-        session_id = str(uuid.uuid4()) # Generate unique ID
+        session_id = str(uuid.uuid4())  # Generate unique ID
         print('Session started', session_id)
-        websocket.session_id = session_id # Assign unique ID to the session
-        sessions[websocket.session_id] = { 
-            'params': {},
-            'state': {}
-        } # Add session to global variable
-        await websocket.send_json({'session_id': session_id}) # Send to client
+        websocket.session_id = session_id  # Assign unique ID to the session
+        await websocket.send_json({'session_id': session_id})  # Send to client
 
         print('Constructing book')
         await construct_book(websocket, book=book, words=words, order=order)
@@ -88,41 +126,16 @@ async def construct_book(websocket: WebSocket, book, words, order):
     except ValueError:
         return await send_error_message(websocket, "Book and words must be a positive integer. Order must be an integer between 0-4.")
     
-    dictionary = []
-    with open(WORD_DICTIONARY, 'r') as file:
-        dictionary = list(json.load(file).keys())
+    dictionary = DICTIONARY
 
-    sessions[websocket.session_id]['params'] = {
-        'text': await load_text(TEXT_FILE), 
-        'max_searches': 500000, 
-        'noise': 0, 
-        'rand': random.Random(), 
-        'noise_rand': random.Random(),
-        'sentence_enders': ['.', '!', '?'],
-        'max_order_of_approx': order,
-        'max_words': words,
-        'type_delay': 0.025,
-        'book': book
-        }
-    
-    sessions[websocket.session_id]['state'] = {
-        'stop_requested': False,
-        'first_word': True,
-        'n_words': 0,
-        'words': [0, 0, 0, 0],
-        'sentences': 0,
-        'sentence_ended': False,
-        'ends_in_comma': False,
-        'curr_order_of_approx': 1,
-        'sentence': '',
-        'finished_constructing': False
-        }
+    sessions[websocket.session_id] = {
+        'params': default_params(book, words, order),
+        'state': default_state(),
+    }
     
     state = sessions[websocket.session_id]['state']
     params = sessions[websocket.session_id]['params']
 
-    params['rand'].seed(book)
-    params['noise_rand'].seed(book)
 
     if params['max_order_of_approx'] == 0:
         await construct_random_text(websocket, dictionary=dictionary)
@@ -141,9 +154,9 @@ async def send_error_message(websocket: WebSocket, message: str):
         return await websocket.send_json({'message': message})
 
 
-async def load_text(folder_path):
-    with open(f'{folder_path}', 'r', encoding='utf-8') as file:
-        return file.read().split()
+async def load_text(_=None):
+    """Return the preloaded source text."""
+    return SOURCE_TEXT
     
 
 async def construct_text(websocket: WebSocket, is_first_order=False):
@@ -426,18 +439,10 @@ async def is_stop_requested(websocket: WebSocket):
             state['stop_requested'] = True
 
             if session_id in sessions:
-                sessions[session_id]['state'] = {
-                    'stop_requested': True,
-                    'first_word': True,
-                    'n_words': 0,
-                    'words': [0, 0, 0, 0],
-                    'sentences': 0,
-                    'sentence_ended': False,
-                    'ends_in_comma': False,
-                    'curr_order_of_approx': 1,
-                    'sentence': '',
-                    'finished_constructing': True
-                }
+                state = default_state()
+                state['stop_requested'] = True
+                state['finished_constructing'] = True
+                sessions[session_id]['state'] = state
                 print('Stop requested so reset data for ID:', session_id)
             print('Returning from is_stop_requested function')
             return True
@@ -451,18 +456,10 @@ async def reset_words(request: Request):
     session_id = session_data.get('session_id')
 
     if session_id in sessions:
-        sessions[session_id]['state'] = {
-            'stop_requested': True,
-            'first_word': True,
-            'n_words': 0,
-            'words': [0, 0, 0, 0],
-            'sentences': 0,
-            'sentence_ended': False,
-            'ends_in_comma': False,
-            'curr_order_of_approx': 1,
-            'sentence': '',
-            'finished_constructing': True
-        }
+        state = default_state()
+        state['stop_requested'] = True
+        state['finished_constructing'] = True
+        sessions[session_id]['state'] = state
         print('Reset words for ID:', session_id)
         return 'Reset words'
     return 'Session not found'
