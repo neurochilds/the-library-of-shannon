@@ -27,6 +27,7 @@ async def websocket_endpoint(websocket: WebSocket):
     Creates websocket with client, recieves form data and passes data as an argument to construct_book()
     '''
     await websocket.accept()
+    session_id = None
 
     try:
         print('Awaiting data')
@@ -53,7 +54,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     finally:
         await websocket.close()
-        if session_id in sessions:
+        if session_id is not None and session_id in sessions:
             del sessions[session_id]
             print('Deleted ID: ', session_id)
         print("Connection closed")
